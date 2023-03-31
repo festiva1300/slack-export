@@ -102,6 +102,13 @@ class Client:
 
         return replies
 
+    def download_file(self, url, download_path) -> None:
+        """指定したファイルをダウンロードする
+        """
+        response = self._session.get(url, headers=self._headers, timeout=10)
+        response.raise_for_status()
+        with open(download_path, 'wb') as f:
+            f.write(response.content)
 
 def main(
     token: str,
@@ -131,7 +138,7 @@ def main(
         channel_id = channel["id"]
         channel_name = channel.get("name") or users[channel.get("user")]["name"]
 
-        logger.info(f"Fetching messages: {channel_name=}")
+        logger.info(f"Fetching messages: {channel_name}")
         messages = client.fetch_messages(channel_id)
 
         messages_and_replies = []
@@ -147,7 +154,7 @@ def main(
         logger.info(f"{len(messages_and_replies)} messages/replies fetched")
 
         output_path = f"{output_dir / channel_name}.{output_format}"
-        with open(output_path, "w") as f:
+        with open(output_path, "w", encoding="utf-8") as f:
             if output_format == "json":
                 json.dump(
                     messages_and_replies,
@@ -161,6 +168,15 @@ def main(
                     json.dump(message, f, ensure_ascii=False, sort_keys=True)
                     f.write("\n")
 
+        for message_or_reply in messages_and_replies:
+            if 'files' in message_or_reply:
+                for file in message_or_reply['files']:
+                    if 'url_private_download' in file:
+                        download_url = file['url_private_download']
+                        file_id = file['id']
+                        file_type = file['filetype']
+                        download_path = f"{output_dir / channel_name}-{file_id}.{file_type}"
+                        client.download_file(download_url, download_path)
 
 if __name__ == "__main__":
     from argparse import ArgumentParser
